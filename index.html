@@ -1,0 +1,329 @@
+<!doctype html>
+ 
+<head>
+    <meta charset="utf-8">
+ 
+    <title>PostBook</title>
+    <meta name="description" content="My Parse App">
+    <meta name="viewport" content="width=device-width">
+    <link rel="stylesheet" href="css/reset.css">
+    <link rel="stylesheet" href="css/styles.css">
+    <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+    <script type="text/javascript" src="http://www.parsecdn.com/js/parse-1.5.0.min.js"></script>
+</head>
+ 
+<body>
+    <div id="main">
+ 
+        <!-- Creates a div where the logged in user name will be displayed -->
+        <div id="current-user">
+        </div>
+ 
+        <!-- Creates the log out div -->
+        <h1>Log out</h1>
+ 
+        <div>
+            <button id="logout">Log out</button>
+        </div>
+ 
+        <!-- Creates the log in form -->
+        <h1>Log in!</h1>
+ 
+        <form id="login">
+            <p><input id="login-name" type="text"></p>
+            <p><input id="login-password" type="password"></p>
+            <p><input id="login-submit" type="submit"></p>
+        </form>
+ 
+        <!-- Creates the signup form -->
+        <h1>Sign up!</h1>
+ 
+        <form id="signup">
+            <p><input id="signup-name" type="text"></p>
+            <p><input id="signup-password" type="password"></p>
+            <p><input id="signup-submit" type="submit"></p>
+        </form>
+ 
+        <h1>Post your post</h1>
+ 
+        <form id="post-form">
+ 
+            <p><input id="post-title" type="text"></p>
+            <p><textarea id="post-content"></textarea></p>
+            <!-- add an input file placement -->
+            <p><input id="post-file" type="file"></p>
+            <p><input id="post-submit" type="submit"></p>
+ 
+        </form>
+ 
+        <!-- This div will display posts after they where clicked on -->
+        <div id="post-detail" data-id="">
+            <h1 id="post-detail-title"></h1>
+            <small id="post-detail-author"></small>
+            <p id="post-detail-content"></p>
+            <img id="post-detail-img" src="">
+           
+            <!-- !!! New form for comments !!! -->
+            <form id="post-comment-form">
+                <p>Post your comment to this topic:</p>
+                <input id="post-comment-id" type="hidden" value="">
+                <textarea id="post-comment"></textarea>
+                <input id="post-comment-submit" type="submit">
+ 
+            </form>
+        </div>
+ 
+        <!-- Posts list is presented here-->
+        <ul id="list-posts"></ul>
+ 
+    </div>
+ 
+    <script type="text/javascript">
+        // **** Input your AppKey and JavaScriptKey here!
+        Parse.initialize("appkey", "javascriptkey");
+ 
+        // Creates a new Parse object from the class where we want to save the data
+        // and set some properties on that object and save it
+        var Post = Parse.Object.extend("Post"); // Spelled the same as our class (table) on Parse
+ 
+        var Comment = Parse.Object.extend("Comment"); // !!! Creates a new Parse object for Comment
+ 
+        // Retrieves the content of the comment form and save it to the DB
+        $("#post-comment-form").submit(function(event) {
+            event.preventDefault(); // Prevent refreshing after submitting
+            var postId = $("#post-comment-id").val();
+            var post = new Post({id: postId}); // Creates a new Parse object by setting the properties inside
+            var postComment = $("#post-comment").val();
+            var user = Parse.User.current(); // Returns the current user that is logged in
+ 
+            // Builds the comment object
+            var comment = new Comment();
+            comment.set("content", postComment);
+            comment.set("user", user);
+            comment.set("post", post);
+ 
+            comment.save({
+                success: function(object) {
+                    console.log("Comment saved: " + postComment);
+                },
+                error: function(obj, error) { // When saving, error function gets the obj you are trying to save and error
+                    console.log("Comment save error: " + error.message);
+                }
+            });
+        });
+ 
+        // Checks if someone is logged into a session
+        function checkLogin() {
+            if (Parse.User.current()) {
+                // Parse.User.current() is a Parse object and .get("username") returns it's property value
+                $("#current-user").html("User logged in: " + Parse.User.current().get("username"));
+            } else {
+                $("#current-user").html("");
+            }
+ 
+        };
+        // Run the checkLogin function once when the page first loads
+        checkLogin();
+ 
+        // When submitting the logout div run this function
+        $("#logout").click(function(event) {
+            Parse.User.logOut();
+            checkLogin();
+        });
+ 
+        // When submitting the login form run this function
+        $("#login").submit(function(event) {
+            event.preventDefault();
+ 
+            // insert into "name" var the content of signup-name
+            var name = $("#login-name").val();
+            var pass = $("#login-password").val();
+ 
+            // Parse User Login receives 2 parameters: name and password and returns the user object if login was successfull
+            Parse.User.logIn(name, pass, {
+                success: function(user) {
+                    checkLogin();
+                    $("#login")[0].reset();
+                },
+                error: function(user, error) {
+                    console.log("Login error: " + error.message);
+                }
+            });
+ 
+        });
+ 
+        // When submitting the signup form run this function
+        $("#signup").submit(function(event) {
+ 
+            event.preventDefault();
+ 
+            // insert into "name" var the content of signup-name
+            var name = $("#signup-name").val();
+            var pass = $("#signup-password").val();
+ 
+            // creates a new build-in Parse User object
+            var user = new Parse.User();
+ 
+            // Set properties on the user object
+            user.set("username", name);
+            user.set("password", pass);
+ 
+            // Parse function for handling User object
+            user.signUp(null, {
+                success: function() {
+                    alert("successfull signup as " + name);
+                    checkLogin();
+                    $("#signup")[0].reset();
+                },
+                Error: function(user, error) { // on User object Parse returns 2 vars
+                    console.log("Signup error: " + error.message);
+                }
+            });
+        });
+ 
+        // When you click on "list-posts" if something inside it is an anchor (a) run the function
+        // General explanation: Clicking on a post title is getting the id of the post that was clicked from the href,
+        // running a Parse query asking for an item from the Posts table where the id value is equals to the one clicked
+        $("#list-posts").on("click", "a", function(event) {
+            event.preventDefault();
+            var id = $(this).attr("href"); // Get the href attribute from the object clicked
+            var query = new Parse.Query(Post);
+            query.equalTo("objectId", id); // takes only the objects with objectId equals to the one in the href
+            query.include("user"); // If there is a pointer in this table to another one, get the full object
+            query.find({
+                success: function(results) {
+                    var title = results[0].get("title"); // Puts the attribute of title of the queried object
+                    var content = results[0].get("content");
+                    var user = results[0].get("user"); // Returns the full user object that was included
+                    var username = user.get("username");
+                    var id = results[0].id; // No need to use get for id
+ 
+                    $("#post-detail-title").html(title); // Sent the extracted data to the div assigned for post details
+                    $("#post-detail-author").html("By: " + username);
+                    $("#post-detail-content").html(content);
+                    $("#post-detail-img").html(url);
+ 
+                    $("#post-comment-id").val(id); // !!! The hidden filed post-comment-id is set to the id of the post
+ 
+                    $("#post-details").attr("data-id", id); // Set the attribute data-id of the div to the id
+ 
+                    if (results[0].get("file")) { // Check whether there is an image in the post
+                        var file = results[0].get("file");
+                        var url = file.url();
+                        $("#post-detail-img").attr("src", url); // Changes the src attribute to the image url
+                    };
+ 
+                },
+                error: function(error) {
+                    console.log("Find post query error: " + error.message);
+                }
+            });
+        });
+ 
+        // Get the posts from Parse and display them
+        function getPosts() {
+            var query = new Parse.Query(Post);
+ 
+            // Include the hole object in the result and not only the reference
+            // In our case, don't just return the user objectID - return the hole user object
+            query.include("user");
+ 
+            query.find({
+                success: function(results) {
+ 
+                    var output = "";
+                    //Query returns an array of Parse objects - we put it inside "results"
+                    // loop on every object in the results array
+                    for (var i in results) {
+                        // insert into "title" var the content of the object in place i with the content in field "title"
+                        var title = results[i].get("title");
+                        var content = results[i].get("content");
+                        var user = results[i].get("user"); // This will return the hole user object
+                        var username = user.get("username"); // This will get the username property
+ 
+                        // results[i].id is the shortcrust way to getting the Parse object generated id
+                        var id = results[i].id;
+ 
+                        // Builds a list string to be be pushed into the ul created in the html
+                        output += "<li>";
+                        output += "<h3><a href='" + id + "'>" + title + "</a></h3>"; // adds an anchor to h3 with the id
+                        output += "</li>";
+                    }
+ 
+                    // After looping has finished and the list string is build, insert it to #list-posts
+                    $("#list-posts").html(output);
+                },
+                error: function(error) {
+                    console.log("Query error: " + error.message);
+                }
+            });
+        }
+ 
+        getPosts();
+ 
+ 
+        $("#post-form").submit(function(event) {
+ 
+            // Prevents reloading the page
+            event.preventDefault();
+ 
+            // Declares a var called title and inserts the "post-tile" value into it
+            var title = $("#post-title").val();
+            var content = $("#post-content").val();
+            // Adds a link to the user who posted
+            var user = Parse.User.current(); // That's the user who is logged in
+ 
+            // Creates newPost object of type Post
+            var newPost = new Post();
+ 
+            // Add an attribute to the object "newPost" called "title" and add the content of the var title to it
+            newPost.set("title", title); // Name of the column in the DB is the same as the attribute of the object - title
+            newPost.set("content", content);
+            newPost.set("user", user); // Assign the user object as an attribute to newPost
+ 
+            // Get file from form input (file types inputs may contain several files so we take the first by [0])
+            var fileElement = $("#post-file")[0];
+            var filePath = $("#post-file").val(); // saves the full file name and location on my computer
+            var fileName = filePath.split("\\").pop(); // split the file path on every \ and get the last one by "pop"
+ 
+            // If the file element is greater then 0, meaning there is a file
+            if (fileElement.files.length > 0) {
+                var file = fileElement.files[0];
+                var newFile = new Parse.File(fileName, file); // New Parse file object receives fileName as an object
+                newFile.save({
+                    success: function() {
+                        alert("Upload file success");
+                    },
+                    error: function(file, error) {
+                        console.log("File save error: " + error.message);
+                    }
+                }).then(function(theFile) { // After the save file is done, then do...
+                    newPost.set("file", theFile); // Adds a new attribute to newPost named file & value of the file path
+                    newPost.save({
+                        success: function() {
+                            getPosts();
+                            $("#post-form")[0].reset();
+                        },
+                        error: function(error) {
+                            console.log("Post save with file error: " + error.message);
+                        }
+                    });
+                });
+            } else { // if the file was not uploaded, save the post to the DB
+                newPost.save({
+                    success: function() {
+                        getPosts();
+                        $("#post-form")[0].reset();
+                    },
+                    error: function(error) {
+                        console.log("Error: " + error.message);
+                    }
+                });
+            }
+        });
+ 
+    </script>
+ 
+</body>
+ 
+</html>
